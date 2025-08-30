@@ -1,0 +1,40 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: flux-system
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  ref:
+    branch: main
+  secretRef:
+    name: flux-system
+  timeout: 1m0s
+  url: ssh://git@github.com/CorreiosPortugal/pt.technology.elkcorp.prd-GITOPS.git
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: flux-system
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  path: ./clusters/aks-elkcorp-prd-01
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: aks-elkcorp-prd-01
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  path: ./overlays/prd
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

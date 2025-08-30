@@ -1,0 +1,77 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: opentelemetry-gw
+  namespace: eck-stack
+spec:
+  selector:
+    istio: ingressgateway
+
+  servers:
+    - port:
+        number: 4317
+        name: collector-agent-grpc-tls   # OTLP/gRPC com TLS
+        protocol: HTTPS             
+      tls:
+        mode: SIMPLE                     # Termina o TLS no ingress gateway
+        credentialName: elk.prd.azure.ctt.pt
+        minProtocolVersion: TLSV1_2
+      hosts:
+        - "otlp-collector.elk.prd.azure.ctt.pt"
+
+    - port:
+        number: 4318
+        name: collector-agent-https      # OTLP/HTTP com TLS
+        protocol: HTTPS
+      tls:
+        mode: SIMPLE                     # Termina TLS no ingress gateway
+        credentialName: elk.prd.azure.ctt.pt
+        minProtocolVersion: TLSV1_2
+      hosts:
+        - "otlp-collector.elk.prd.azure.ctt.pt"
+        
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: opentelemetry-vs
+  namespace: eck-stack
+spec:
+  hosts:
+    - otlp-collector.elk.prd.azure.ctt.pt
+  gateways:
+    - opentelemetry-gw
+
+  http:
+    - name: otlp-grpc
+      match:
+        - port: 4317
+      route:
+        - destination:
+            host: opentelemetry-collector-gw.eck-stack.svc.cluster.local
+            port:
+              number: 4317
+
+    - name: otlp-http
+      match:
+        - port: 4318
+      route:
+        - destination:
+            host: opentelemetry-collector-gw.eck-stack.svc.cluster.local
+            port:
+              number: 4318
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: opentelemetry-dr
+  namespace: eck-stack
+spec:
+  host: opentelemetry-collector-gw.eck-stack.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: DISABLE   # TLS termina no Gateway; backend é HTTP claro
+    connectionPool:
+      http:
+        h2UpgradePolicy: DO_NOT_UPGRADE

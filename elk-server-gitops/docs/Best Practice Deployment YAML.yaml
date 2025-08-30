@@ -1,0 +1,140 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: <microservice name>
+  namespace: <microservice namespace> # Required for FLUX management
+  labels:
+    app: <microservice app name>
+    version: <version number> # Required for ISTIO traffic shiffiting
+spec:
+  replicas: 3 # Replica number for High Availability
+  selector:
+    matchLabels:
+      app: <microservice app name>
+  strategy: # Update strategy (rolling update)
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1 # Max number of replicas that should be created during update
+      maxUnavailable: 1 # Max number of unavailable pods during update
+  template:
+    metadata:
+      labels:
+        app: <microservice app name>
+        version: <version number> # Required for ISTIO traffic shiffiting
+    spec:
+      serviceAccountName: <service account for the microservice>
+      containers:
+      - name: microservice 
+        image: microservice-image-path:<version tag>
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080 # Microservice port
+        securityContext:
+          readOnlyRootFilesystem: true # filesystem read-only
+          runAsNonRoot: true # No execute as root user
+        env:
+          - name: <environment variable name>
+              valueFrom:
+                secretKeyRef:
+                  name: <secret name reference>
+                  key: <secret key reference>
+        livenessProbe:
+          httpGet:
+            path: /health # Endpoint to check microservice health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /readiness # Endpoint to check if the microservice is ready to receive requests
+            port: 8080
+          initialDelaySeconds: 3
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: "500m"    # Limit for CPU usage
+            memory: "256Mi" # Limit for memory usage
+          requests:
+            cpu: "250m"    # CPU alocated to start the Pod
+            memory: "128Mi" # Memory alocated  to start the Pod
+---
+# The service account and roles must be created to avoid root and overpermissions executions inside the containers
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: <serviceAccount name>
+  namespace: <serviceAccount namespace> # Must be created at the same namespace as the Microservice
+  labels:
+    account: <microservice name>
+---    
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: <clusterRole name>
+rules:
+  - apiGroups: # Declare what kind of APIs the role will affect (ex: apps, batch,storage.k8s.io), empty means all apiGroups
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+  - apiGroups:
+      - ""
+    resources:  
+      - services
+      - endpoints
+    verbs:
+      - get
+      - list
+      - watch
+---      
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: <clusterRoleBinding name>
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: <clusterRole name>
+subjects:
+- kind: ServiceAccount
+  name: <service account for the microservice>
+  namespace: <serviceAccount namespace>
+---
+# For autoscaling Pods and ensure High Availability use the Horizontal Pod Autoscaler resource
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: <microservice name>-hpa
+  namespace: <microservice namespace>
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: <deployment name>
+    namespace: <deployment namespace>
+  minReplicas: 1 # Min desired number of Pods running 
+  maxReplicas: 6 # Max number of Pods to scale up during higher usage
+  metrics:
+  - type: Resource # Type of resource to be checked and trigger the autoscaling
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70 # The autoscaling starts at Percentage utilization of all pods from deployment
+  behavior:
+   scaleDown:
+     stabilizationWindowSeconds: 300
+     policies:
+     - type: Pods
+       value: 2
+       periodSeconds: 15
+   scaleUp:
+     stabilizationWindowSeconds: 60
+     policies:
+     - type: Pods
+       value: 2
+       periodSeconds: 15

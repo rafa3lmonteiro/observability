@@ -1,0 +1,18 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: filebeat
+  namespace: eck-stack
+spec:
+  interval: 10m
+  releaseName: filebeat
+  chart:
+    spec:
+      chart: eck-beats
+      sourceRef:
+        kind: HelmRepository
+        name: elastic
+        namespace: eck-stack
+  valuesFrom:
+    - kind: ConfigMap
+      name: filebeat-values
