@@ -1,5 +1,5 @@
 # Introduction 
-This project is part of CTT Microservices Boilerplate. 
+This project is part of AKS Microservices. 
 In this project it will be built a complete solution using AKS and DevOps Tools. 
 It will be represented a template for deployment applications using automation skills.
 
